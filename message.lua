@@ -6,31 +6,27 @@ local UserInputService = game:GetService("UserInputService")
 local localPlayer = Players.LocalPlayer
 local highlightingEnabled = false
 local displayEnabled = true
-local outlines = {} -- Store created highlight objects
-local billboards = {} -- Store created billboard GUIs
+local outlines = {}
+local billboards = {}
 
--- Function to create or update outlines and billboards
 local function updateOutlines()
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= localPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            -- Highlight setup
             local highlight = outlines[player] or Instance.new("Highlight")
             highlight.Adornee = player.Character
             highlight.FillTransparency = 1
-            highlight.OutlineColor = Color3.new(1, 1, 1) -- White outline
+            highlight.OutlineColor = Color3.new(1, 1, 1)
             highlight.OutlineTransparency = 0
             highlight.Parent = game.Workspace
             outlines[player] = highlight
 
             if displayEnabled then
-                -- Billboard setup
                 local billboard = billboards[player] or Instance.new("BillboardGui")
                 billboard.Adornee = player.Character:FindFirstChild("HumanoidRootPart")
-                billboard.Size = UDim2.new(0, 150, 0, 40) -- Smaller text
+                billboard.Size = UDim2.new(0, 150, 0, 40)
                 billboard.StudsOffset = Vector3.new(0, 3, 0)
                 billboard.AlwaysOnTop = true
 
-                -- TextLabel for username and distance
                 local textLabel = billboard:FindFirstChild("UsernameLabel") or Instance.new("TextLabel")
                 textLabel.Name = "UsernameLabel"
                 textLabel.Text = string.format("%s\n%.1f studs", player.Name, (localPlayer.Character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude)
@@ -52,7 +48,6 @@ local function updateOutlines()
         end
     end
 
-    -- Remove outlines and billboards for players no longer in the game
     for player, highlight in pairs(outlines) do
         if not Players:FindFirstChild(player.Name) then
             highlight:Destroy()
@@ -68,7 +63,6 @@ local function updateOutlines()
     end
 end
 
--- Toggle highlighting and display toggles
 local connection
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
@@ -108,45 +102,39 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
--- Variables
-local player = game.Players.LocalPlayer
-local mouse = player:GetMouse()
-local target = nil
-local activationRadius = 200 -- Radius for aimlock
-local aimlockActivated = false -- Tracks if aimlock is active (F1 toggles)
-local holdingRightClick = false -- Tracks if the right mouse button is held
-
-local runService = game:GetService("RunService")
-local userInputService = game:GetService("UserInputService")
+-- Aimlock Variables
+local mouse = localPlayer:GetMouse()
 local camera = workspace.CurrentCamera
+local activationRadius = 200
+local maxDistance = 10000
+local aimlockActivated = false
+local holdingRightClick = false
 
--- Function to check if a target's head is visible
 local function isHeadVisible(targetHead)
-    local character = player.Character
+    local character = localPlayer.Character
     if not character or not character:FindFirstChild("Head") then return false end
 
-    local ray = Ray.new(character.Head.Position, (targetHead.Position - character.Head.Position).Unit * 500)
-    local hitPart = workspace:FindPartOnRay(ray, character)
-
+    local ray = Ray.new(character.Head.Position, (targetHead.Position - character.Head.Position).Unit * maxDistance)
+    local hitPart, _ = workspace:FindPartOnRay(ray, character)
     return hitPart and hitPart:IsDescendantOf(targetHead.Parent)
 end
 
--- Function to find the closest visible player within the activation radius
 local function getClosestVisibleToCursor()
     local closestTarget = nil
     local closestDistance = math.huge
 
-    for _, otherPlayer in pairs(game.Players:GetPlayers()) do
-        if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("Head") then
+    for _, otherPlayer in pairs(Players:GetPlayers()) do
+        if otherPlayer ~= localPlayer and otherPlayer.Character and otherPlayer.Character:FindFirstChild("Head") then
             local head = otherPlayer.Character.Head
             local headScreenPosition, onScreen = camera:WorldToScreenPoint(head.Position)
 
             if onScreen and isHeadVisible(head) then
                 local cursorPosition = Vector2.new(mouse.X, mouse.Y)
-                local distance = (Vector2.new(headScreenPosition.X, headScreenPosition.Y) - cursorPosition).magnitude
+                local distanceToCursor = (Vector2.new(headScreenPosition.X, headScreenPosition.Y) - cursorPosition).Magnitude
+                local distanceToPlayer = (localPlayer.Character.HumanoidRootPart.Position - head.Position).Magnitude
 
-                if distance < activationRadius and distance < closestDistance then
-                    closestDistance = distance
+                if distanceToCursor < activationRadius and distanceToPlayer < maxDistance and distanceToCursor < closestDistance then
+                    closestDistance = distanceToCursor
                     closestTarget = head
                 end
             end
@@ -156,19 +144,41 @@ local function getClosestVisibleToCursor()
     return closestTarget
 end
 
--- Function to assist the user's flick towards the target
+local function getPredictionOffset(targetHead, distance)
+    local character = targetHead.Parent
+    if not character then return Vector3.zero end
+
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return Vector3.zero end
+
+    local velocity = humanoidRootPart.Velocity
+    local predictionFactor = math.clamp(distance / 1000, 0.05, 0.8) -- Adjust the divisor to scale subtlety (600 in this case)
+
+    -- Subtle horizontal and vertical adjustments
+    local horizontalOffset = velocity * predictionFactor * Vector3.new(0.2, 0, 0.2)
+    local verticalOffset = Vector3.new(0, math.clamp(velocity.Y * predictionFactor * 0.05, -3, 3), 0) -- Reduced vertical influence
+
+    return horizontalOffset + verticalOffset
+end
+
 local function assistFlick(targetHead)
     if targetHead and targetHead.Parent then
-        local cameraDirection = (targetHead.Position - camera.CFrame.Position).Unit
-        local flickStrength = 0.6 -- Stronger flick assist
+        local character = localPlayer.Character
+        if not character or not character:FindFirstChild("HumanoidRootPart") then return end
 
-        -- Adjust camera slightly toward the target
+        local humanoidRootPart = character.HumanoidRootPart
+        local distance = (humanoidRootPart.Position - targetHead.Position).Magnitude
+        local predictionOffset = getPredictionOffset(targetHead, distance)
+
+        local targetPosition = targetHead.Position + Vector3.new(0, -0.5, 0) + predictionOffset
+        local cameraDirection = (targetPosition - camera.CFrame.Position).Unit
+        local flickStrength = 0.9
+
         camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, camera.CFrame.Position + cameraDirection), flickStrength)
     end
 end
 
--- Key press and mouse event handling
-userInputService.InputBegan:Connect(function(input, isProcessed)
+UserInputService.InputBegan:Connect(function(input, isProcessed)
     if isProcessed then return end
 
     if input.KeyCode == Enum.KeyCode.F1 then
@@ -183,64 +193,56 @@ userInputService.InputBegan:Connect(function(input, isProcessed)
     end
 end)
 
-userInputService.InputEnded:Connect(function(input)
+UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton2 then
         holdingRightClick = false
     end
 end)
 
--- RenderStepped: Trigger aimlock with flick assist when right click is held and aimlock is active
-runService.RenderStepped:Connect(function()
+RunService.RenderStepped:Connect(function()
     if aimlockActivated and holdingRightClick then
-        target = getClosestVisibleToCursor()
+        local target = getClosestVisibleToCursor()
         assistFlick(target)
     end
 end)
 
--- Menu Variables
+-- Menu GUI with Drag-and-Drop
 local menuOpen = false
 local menuFrame = nil
-local dragActive = false
-local dragStart = nil
-local startPos = nil
 
--- Create the Menu GUI
 local function createMenu()
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "SigmaGyatHub"
-    screenGui.Parent = player:WaitForChild("PlayerGui")
+    screenGui.Parent = localPlayer:WaitForChild("PlayerGui")
 
     local frame = Instance.new("Frame")
     frame.Name = "MainFrame"
-    frame.Size = UDim2.new(0, 300, 0, 400)
-    frame.Position = UDim2.new(1, -310, 0, 10)
+    frame.Size = UDim2.new(0, 350, 0, 400)
+    frame.Position = UDim2.new(0.5, -175, 0.5, -200)
     frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     frame.BorderSizePixel = 0
-    frame.AnchorPoint = Vector2.new(1, 0)
+    frame.AnchorPoint = Vector2.new(0.5, 0.5)
     frame.Parent = screenGui
 
     local uiCorner = Instance.new("UICorner")
     uiCorner.CornerRadius = UDim.new(0, 10)
     uiCorner.Parent = frame
 
+    local uiStroke = Instance.new("UIStroke")
+    uiStroke.Color = Color3.new(1, 0.84, 0)
+    uiStroke.Thickness = 2
+    uiStroke.Parent = frame
+
     local title = Instance.new("TextLabel")
-    title.Name = "Title"
     title.Size = UDim2.new(1, 0, 0, 50)
-    title.Position = UDim2.new(0, 0, 0, 0)
-    title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     title.Text = "Sigma Gyat Hub"
-    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.TextColor3 = Color3.new(1, 0.84, 0)
     title.Font = Enum.Font.GothamBlack
-    title.TextSize = 20
-    title.BorderSizePixel = 0
+    title.TextSize = 24
     title.Parent = frame
 
-    local uiCornerTitle = Instance.new("UICorner")
-    uiCornerTitle.CornerRadius = UDim.new(0, 10)
-    uiCornerTitle.Parent = title
-
     local controls = Instance.new("Frame")
-    controls.Name = "Controls"
     controls.Size = UDim2.new(1, -20, 1, -70)
     controls.Position = UDim2.new(0, 10, 0, 60)
     controls.BackgroundTransparency = 1
@@ -255,7 +257,8 @@ local function createMenu()
         "Toggle Highlighting: F2",
         "Toggle Display: F3",
         "Toggle Aimlock: F1",
-        "Drag this Menu: Hold and Drag"
+        "Show/Hide Menu: F4",
+        "Drag Menu: Click and Drag"
     }
 
     for _, text in ipairs(bulletPoints) do
@@ -263,58 +266,56 @@ local function createMenu()
         controlText.Size = UDim2.new(1, 0, 0, 30)
         controlText.BackgroundTransparency = 1
         controlText.Text = "• " .. text
-        controlText.TextColor3 = Color3.fromRGB(255, 255, 255)
+        controlText.TextColor3 = Color3.new(1, 1, 1)
         controlText.Font = Enum.Font.Gotham
-        controlText.TextSize = 16
+        controlText.TextSize = 18
         controlText.TextXAlignment = Enum.TextXAlignment.Left
         controlText.Parent = controls
     end
 
-    local uiStroke = Instance.new("UIStroke")
-    uiStroke.Color = Color3.fromRGB(255, 215, 0) -- Gold accent
-    uiStroke.Thickness = 2
-    uiStroke.Parent = frame
-
-    menuFrame = frame
-end
-
--- Dragging Functionality
-local function enableDragging(frame)
+    -- Drag-and-Drop Functionality
+    local dragStart, startPos
+    local dragging
     frame.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragActive = true
+            dragging = true
             dragStart = input.Position
             startPos = frame.Position
 
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
-                    dragActive = false
+                    dragging = false
                 end
             end)
         end
     end)
 
-    UserInputService.InputChanged:Connect(function(input)
-        if dragActive and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = input.Position - dragStart
-            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    frame.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            if dragging then
+                local delta = input.Position - dragStart
+                frame.Position = UDim2.new(
+                    startPos.X.Scale,
+                    startPos.X.Offset + delta.X,
+                    startPos.Y.Scale,
+                    startPos.Y.Offset + delta.Y
+                )
+            end
         end
     end)
+
+    menuFrame = frame
 end
 
--- Keybind to Toggle Menu
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-
+UserInputService.InputBegan:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.F4 then
         menuOpen = not menuOpen
-
         if menuOpen then
             if not menuFrame then
                 createMenu()
-                enableDragging(menuFrame)
+            else
+                menuFrame.Visible = true
             end
-            menuFrame.Visible = true
         else
             if menuFrame then
                 menuFrame.Visible = false
