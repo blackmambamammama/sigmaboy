@@ -26,7 +26,7 @@ local function updateOutlines()
                 -- Billboard setup
                 local billboard = billboards[player] or Instance.new("BillboardGui")
                 billboard.Adornee = player.Character:FindFirstChild("HumanoidRootPart")
-                billboard.Size = UDim2.new(0, 150, 0, 40) -- Smaller text
+                billboard.Size = UDim2.new(0, 110, 0, 30) -- Smaller text
                 billboard.StudsOffset = Vector3.new(0, 3, 0)
                 billboard.AlwaysOnTop = true
 
