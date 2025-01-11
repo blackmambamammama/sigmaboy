@@ -1,4 +1,4 @@
--- LocalScript: Place this in StarterPlayerScripts
+-- Place this script in StarterPlayerScripts
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -26,7 +26,7 @@ local function updateOutlines()
                 -- Billboard setup
                 local billboard = billboards[player] or Instance.new("BillboardGui")
                 billboard.Adornee = player.Character:FindFirstChild("HumanoidRootPart")
-                billboard.Size = UDim2.new(0, 110, 0, 30) -- Smaller text
+                billboard.Size = UDim2.new(0, 150, 0, 40) -- Smaller text
                 billboard.StudsOffset = Vector3.new(0, 3, 0)
                 billboard.AlwaysOnTop = true
 
@@ -107,6 +107,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         end
     end
 end)
+
 -- Variables
 local player = game.Players.LocalPlayer
 local mouse = player:GetMouse()
@@ -193,5 +194,131 @@ runService.RenderStepped:Connect(function()
     if aimlockActivated and holdingRightClick then
         target = getClosestVisibleToCursor()
         assistFlick(target)
+    end
+end)
+
+-- Menu Variables
+local menuOpen = false
+local menuFrame = nil
+local dragActive = false
+local dragStart = nil
+local startPos = nil
+
+-- Create the Menu GUI
+local function createMenu()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "SigmaGyatHub"
+    screenGui.Parent = player:WaitForChild("PlayerGui")
+
+    local frame = Instance.new("Frame")
+    frame.Name = "MainFrame"
+    frame.Size = UDim2.new(0, 300, 0, 400)
+    frame.Position = UDim2.new(1, -310, 0, 10)
+    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    frame.BorderSizePixel = 0
+    frame.AnchorPoint = Vector2.new(1, 0)
+    frame.Parent = screenGui
+
+    local uiCorner = Instance.new("UICorner")
+    uiCorner.CornerRadius = UDim.new(0, 10)
+    uiCorner.Parent = frame
+
+    local title = Instance.new("TextLabel")
+    title.Name = "Title"
+    title.Size = UDim2.new(1, 0, 0, 50)
+    title.Position = UDim2.new(0, 0, 0, 0)
+    title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    title.Text = "Sigma Gyat Hub"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.Font = Enum.Font.GothamBlack
+    title.TextSize = 20
+    title.BorderSizePixel = 0
+    title.Parent = frame
+
+    local uiCornerTitle = Instance.new("UICorner")
+    uiCornerTitle.CornerRadius = UDim.new(0, 10)
+    uiCornerTitle.Parent = title
+
+    local controls = Instance.new("Frame")
+    controls.Name = "Controls"
+    controls.Size = UDim2.new(1, -20, 1, -70)
+    controls.Position = UDim2.new(0, 10, 0, 60)
+    controls.BackgroundTransparency = 1
+    controls.Parent = frame
+
+    local controlList = Instance.new("UIListLayout")
+    controlList.SortOrder = Enum.SortOrder.LayoutOrder
+    controlList.Padding = UDim.new(0, 10)
+    controlList.Parent = controls
+
+    local bulletPoints = {
+        "Toggle Highlighting: F2",
+        "Toggle Display: F3",
+        "Toggle Aimlock: F1",
+        "Drag this Menu: Hold and Drag"
+    }
+
+    for _, text in ipairs(bulletPoints) do
+        local controlText = Instance.new("TextLabel")
+        controlText.Size = UDim2.new(1, 0, 0, 30)
+        controlText.BackgroundTransparency = 1
+        controlText.Text = "• " .. text
+        controlText.TextColor3 = Color3.fromRGB(255, 255, 255)
+        controlText.Font = Enum.Font.Gotham
+        controlText.TextSize = 16
+        controlText.TextXAlignment = Enum.TextXAlignment.Left
+        controlText.Parent = controls
+    end
+
+    local uiStroke = Instance.new("UIStroke")
+    uiStroke.Color = Color3.fromRGB(255, 215, 0) -- Gold accent
+    uiStroke.Thickness = 2
+    uiStroke.Parent = frame
+
+    menuFrame = frame
+end
+
+-- Dragging Functionality
+local function enableDragging(frame)
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragActive = true
+            dragStart = input.Position
+            startPos = frame.Position
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragActive = false
+                end
+            end)
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragActive and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+
+-- Keybind to Toggle Menu
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+
+    if input.KeyCode == Enum.KeyCode.F4 then
+        menuOpen = not menuOpen
+
+        if menuOpen then
+            if not menuFrame then
+                createMenu()
+                enableDragging(menuFrame)
+            end
+            menuFrame.Visible = true
+        else
+            if menuFrame then
+                menuFrame.Visible = false
+            end
+        end
     end
 end)
