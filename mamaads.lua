@@ -2044,25 +2044,6 @@ end)
      debug_watermark.Visible = enables.debug.enabled
      end
  end)
- --
- local menuVisible = true -- Estado inicial del menú (visible)
-local userInputService = game:GetService("UserInputService") -- Servicio para manejar entradas del usuario
-
--- Función para alternar la visibilidad del menú
-local function toggleMenu()
-    menuVisible = not menuVisible
-    -- Aquí puedes colocar el código para ocultar o mostrar tu menú.
-    -- Por ejemplo, si el menú es una GUI:
-    -- menuGui.Enabled = menuVisible
-    print("Menu visibility toggled: ", menuVisible)
-end
-
--- Evento para detectar cuando se presiona una tecla
-userInputService.InputBegan:Connect(function(input, isProcessed)
-    if not isProcessed and input.KeyCode == Enum.KeyCode.RightShift then
-        toggleMenu()
-    end
-end)
  --// Config
  local createconfigs = tabs.settings:createGroup('right', 'Config')
  do
@@ -2076,3 +2057,19 @@ end)
  library:refreshConfigs()
  library:Notify("Loader : Access Successful!", 5)
  wait(0.1) library:Notify(string.format("Success: loaded in %.2fs", os.clock() - os_clock),20)
+local menuVisible = true -- Estado inicial del menú (visible)
+local userInputService = game:GetService("UserInputService")
+--// Función para alternar la visibilidad del menú
+local function toggleMenu()
+    menuVisible = not menuVisible
+    -- Aquí puedes colocar el código para ocultar o mostrar tu menú.
+    -- Por ejemplo, si el menú es una GUI:
+    -- menuGui.Enabled = menuVisible
+    print("Menu visibility toggled: ", menuVisible)
+end
+--// Evento para detectar cuando se presiona una tecla
+userInputService.InputBegan:Connect(function(input, isProcessed)
+    if not isProcessed and input.KeyCode == Enum.KeyCode.RightShift then
+        toggleMenu()
+    end
+end)
